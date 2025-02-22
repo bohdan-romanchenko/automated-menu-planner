@@ -39,6 +39,7 @@ import {
   deleteProduct,
   type Product,
 } from "../../lib/products";
+import { Navigation } from "../components/Navigation";
 
 interface SortableItemProps {
   product: Product;
@@ -207,8 +208,9 @@ export default function Home() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-8 md:px-6">
-      <div className="w-full max-w-[400px]">
+    <div className="flex min-h-screen flex-col items-center bg-gray-50 px-4 py-8 md:px-6">
+      <Navigation />
+      <div className="mt-4 w-full max-w-[400px]">
         <Box className="rounded-xl bg-white p-4 shadow-lg md:p-8">
           <Heading size="6" mb="6" className="text-center">
             My Kitchen Inventory
