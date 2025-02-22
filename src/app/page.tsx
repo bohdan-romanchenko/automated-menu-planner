@@ -9,17 +9,20 @@ import {
   Text,
   Button,
   Checkbox,
+  TextField,
 } from "@radix-ui/themes";
 import {
   PlusIcon,
   DragHandleDots2Icon,
   Cross2Icon,
+  MagnifyingGlassIcon,
 } from "@radix-ui/react-icons";
 import {
   DndContext,
   closestCenter,
   KeyboardSensor,
   PointerSensor,
+  TouchSensor,
   useSensor,
   useSensors,
   type DragEndEvent,
@@ -47,9 +50,17 @@ interface SortableItemProps {
   onDelete: (id: number) => void;
 }
 
-function SortableItem({ product, onToggle, onDelete }: SortableItemProps) {
+function SortableItem({
+  product,
+  onToggle,
+  onDelete,
+  isDragDisabled,
+}: SortableItemProps & { isDragDisabled: boolean }) {
   const { attributes, listeners, setNodeRef, transform, transition } =
-    useSortable({ id: product.id });
+    useSortable({
+      id: product.id,
+      disabled: isDragDisabled,
+    });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -66,7 +77,9 @@ function SortableItem({ product, onToggle, onDelete }: SortableItemProps) {
     >
       <Flex gap="4" align="center" className="flex-1">
         <div {...attributes} {...listeners}>
-          <DragHandleDots2Icon className="h-5 w-5 cursor-grab text-gray-400" />
+          <DragHandleDots2Icon
+            className={`h-5 w-5 ${isDragDisabled ? "cursor-default text-gray-200" : "cursor-grab text-gray-400"}`}
+          />
         </div>
         <Checkbox
           checked={product.available}
@@ -97,11 +110,24 @@ function SortableItem({ product, onToggle, onDelete }: SortableItemProps) {
 export default function Home() {
   const [products, setProducts] = useState<Product[]>([]);
   const [newProduct, setNewProduct] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const sensors = useSensors(
-    useSensor(PointerSensor),
+    useSensor(TouchSensor, {
+      activationConstraint: {
+        delay: 50,
+        tolerance: 8,
+        distance: 1,
+      },
+    }),
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 1,
+        tolerance: 8,
+      },
+    }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
     }),
@@ -128,14 +154,28 @@ export default function Home() {
     if (!newProduct.trim()) return;
 
     try {
-      const maxOrder = Math.max(...products.map((p) => p.order), 0);
+      // Add new product at the beginning (order 0)
       const newProductData = await addProduct({
         name: newProduct.trim(),
         available: true,
-        order: maxOrder + 1,
+        order: 0,
       });
 
-      setProducts([...products, newProductData]);
+      // Shift all existing products' orders by 1
+      const updatedProducts = products.map((product) => ({
+        ...product,
+        order: product.order + 1,
+      }));
+
+      // Update orders in the database
+      await Promise.all(
+        updatedProducts.map((product) =>
+          updateProduct(product.id, { order: product.order }),
+        ),
+      );
+
+      // Update local state with new product at the beginning
+      setProducts([newProductData, ...updatedProducts]);
       setNewProduct("");
       setError(null);
     } catch (err) {
@@ -199,6 +239,13 @@ export default function Home() {
     }
   };
 
+  // Filter products based on search query
+  const filteredProducts = products.filter((product) =>
+    product.name.toLowerCase().includes(searchQuery.toLowerCase()),
+  );
+
+  const isSearchActive = searchQuery.trim().length > 0;
+
   if (isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -221,26 +268,39 @@ export default function Home() {
           )}
 
           <Box mb="6 md:mb-8">
-            <Flex className="gap-2 md:gap-3" align="center">
-              <input
-                type="text"
-                value={newProduct}
-                onChange={(e) => setNewProduct(e.target.value)}
-                placeholder="Add new product..."
-                className="h-11 flex-1 rounded-lg border border-gray-200 px-3 text-base focus:border-blue-500 focus:outline-none md:h-14 md:px-5"
-                onKeyPress={(e) => {
-                  if (e.key === "Enter") {
-                    void handleAddProduct();
-                  }
-                }}
-              />
-              <Button
-                onClick={() => void handleAddProduct()}
-                className="inline-flex h-11 items-center justify-center bg-[#B7E33B] px-3 text-base font-medium hover:bg-[#a5ce34] md:h-14 md:px-5"
-              >
-                <PlusIcon width="18" height="18" className="mr-1" />
-                <span className="hidden md:inline">Add</span>
-              </Button>
+            <Flex direction="column" gap="3">
+              <Flex className="gap-2 md:gap-3" align="center">
+                <input
+                  type="text"
+                  value={newProduct}
+                  onChange={(e) => setNewProduct(e.target.value)}
+                  placeholder="Add new product..."
+                  className="h-11 flex-1 rounded-lg border border-gray-200 px-3 text-base focus:border-blue-500 focus:outline-none md:h-14 md:px-5"
+                  onKeyPress={(e) => {
+                    if (e.key === "Enter") {
+                      void handleAddProduct();
+                    }
+                  }}
+                />
+                <Button
+                  onClick={() => void handleAddProduct()}
+                  className="inline-flex h-11 items-center justify-center bg-[#B7E33B] px-3 text-base font-medium hover:bg-[#a5ce34] md:h-14 md:px-5"
+                >
+                  <PlusIcon width="18" height="18" className="mr-1" />
+                  <span className="hidden md:inline">Add</span>
+                </Button>
+              </Flex>
+
+              <Flex align="center" className="relative">
+                <MagnifyingGlassIcon className="absolute left-3 h-4 w-4 text-gray-400" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search products..."
+                  className="h-11 w-full rounded-lg border border-gray-200 pl-9 pr-3 text-base focus:border-blue-500 focus:outline-none md:h-12"
+                />
+              </Flex>
             </Flex>
           </Box>
 
@@ -251,15 +311,16 @@ export default function Home() {
               onDragEnd={handleDragEnd}
             >
               <SortableContext
-                items={products}
+                items={filteredProducts}
                 strategy={verticalListSortingStrategy}
               >
-                {products.map((product) => (
+                {filteredProducts.map((product) => (
                   <SortableItem
                     key={product.id}
                     product={product}
                     onToggle={toggleProductAvailability}
                     onDelete={handleDeleteProduct}
+                    isDragDisabled={isSearchActive}
                   />
                 ))}
               </SortableContext>

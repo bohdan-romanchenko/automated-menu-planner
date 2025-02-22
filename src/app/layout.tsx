@@ -24,9 +24,10 @@ export default function RootLayout({
           grayColor="slate"
           radius="none"
           scaling="95%"
+          className="print:!block"
         >
           {children}
-          <ThemePanel defaultOpen={false} />
+          <ThemePanel defaultOpen={false} className="print-hide" />
         </Theme>
       </body>
     </html>

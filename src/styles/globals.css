@@ -8,3 +8,57 @@
     @apply min-h-screen bg-gray-50;
   }
 }
+
+/* Override Radix UI button styles */
+button,
+[role="button"] {
+  cursor: pointer !important;
+}
+
+@media print {
+  @page {
+    size: landscape;
+    margin: 1.5cm;
+  }
+
+  body {
+    background: white !important;
+    min-height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Hide navigation and other UI elements */
+  nav,
+  button,
+  .print-hide {
+    display: none !important;
+  }
+
+  /* Show only the menu content */
+  .print-show {
+    display: block !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Ensure text is black for better printing */
+  td,
+  th {
+    color: black !important;
+    border-color: black !important;
+  }
+
+  /* Add page break between tables if multiple */
+  table {
+    page-break-inside: avoid;
+    width: 100% !important;
+    margin-top: 0 !important;
+  }
+
+  /* Ensure the table is on a single page */
+  .print-content {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}
