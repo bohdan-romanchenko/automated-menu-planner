@@ -6,6 +6,7 @@ import { StarIcon } from "@radix-ui/react-icons";
 import { Navigation } from "../../components/Navigation";
 import { generateMenu } from "../actions";
 import { getLatestMenu } from "../../lib/menus";
+import { MenuDisplay } from "../../components/MenuDisplay";
 
 interface MenuContent {
   id: number;
@@ -55,9 +56,9 @@ export default function Menu() {
   return (
     <div className="flex min-h-screen flex-col items-center bg-gray-50 px-4 py-8 md:px-6">
       <Navigation />
-      <div className="mt-4 w-full max-w-[400px]">
+      <div className="mt-4 w-full max-w-[1000px]">
         <Box className="rounded-xl bg-white p-4 shadow-lg md:p-8">
-          <Flex direction="column" gap="4">
+          <Flex direction="column" gap="4" align="center">
             <Heading size="6" className="text-center">
               Weekly Menu
             </Heading>
@@ -66,6 +67,7 @@ export default function Menu() {
 
             <Button
               size="3"
+              style={{ maxWidth: "200px" }}
               onClick={() => void handleGenerate()}
               disabled={isGenerating}
               className="bg-[#B7E33B] font-medium hover:bg-[#a5ce34]"
@@ -77,9 +79,7 @@ export default function Menu() {
             {isLoading ? (
               <Text className="text-center text-gray-500">Loading...</Text>
             ) : menu ? (
-              <Box className="mt-4 whitespace-pre-wrap rounded-lg border border-gray-200 p-4">
-                {menu.content}
-              </Box>
+              <MenuDisplay content={menu.content} />
             ) : (
               <Text className="text-center text-gray-500">
                 No menu generated yet. Click the button above to generate one!

@@ -38,7 +38,7 @@ import {
   updateProduct,
   deleteProduct,
   type Product,
-} from "../../lib/products";
+} from "~/lib/products";
 import { Navigation } from "../components/Navigation";
 
 interface SortableItemProps {
