@@ -10,7 +10,28 @@ import {
   Button,
   Checkbox,
 } from "@radix-ui/themes";
-import { PlusIcon } from "@radix-ui/react-icons";
+import {
+  PlusIcon,
+  DragHandleDots2Icon,
+  Cross2Icon,
+} from "@radix-ui/react-icons";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import {
   getAllProducts,
   addProduct,
@@ -19,11 +40,71 @@ import {
   type Product,
 } from "../../lib/products";
 
+interface SortableItemProps {
+  product: Product;
+  onToggle: (id: number) => void;
+  onDelete: (id: number) => void;
+}
+
+function SortableItem({ product, onToggle, onDelete }: SortableItemProps) {
+  const { attributes, listeners, setNodeRef, transform, transition } =
+    useSortable({ id: product.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  return (
+    <Flex
+      ref={setNodeRef}
+      style={style}
+      align="center"
+      justify="between"
+      className="rounded-lg border border-gray-100 px-3 py-2.5 transition-colors hover:bg-gray-50 md:px-4 md:py-3.5"
+    >
+      <Flex gap="4" align="center" className="flex-1">
+        <div {...attributes} {...listeners}>
+          <DragHandleDots2Icon className="h-5 w-5 cursor-grab text-gray-400" />
+        </div>
+        <Checkbox
+          checked={product.available}
+          onCheckedChange={() => onToggle(product.id)}
+          size="3"
+        />
+        <Text
+          className={`select-none text-base ${
+            product.available ? "" : "text-gray-400"
+          }`}
+        >
+          {product.name}
+        </Text>
+      </Flex>
+      <button
+        className="ml-2 rounded-full p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-500"
+        onClick={(e) => {
+          e.stopPropagation();
+          onDelete(product.id);
+        }}
+      >
+        <Cross2Icon className="h-4 w-4" />
+      </button>
+    </Flex>
+  );
+}
+
 export default function Home() {
   const [products, setProducts] = useState<Product[]>([]);
   const [newProduct, setNewProduct] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
+  );
 
   useEffect(() => {
     void loadProducts();
@@ -46,9 +127,11 @@ export default function Home() {
     if (!newProduct.trim()) return;
 
     try {
+      const maxOrder = Math.max(...products.map((p) => p.order), 0);
       const newProductData = await addProduct({
         name: newProduct.trim(),
         available: true,
+        order: maxOrder + 1,
       });
 
       setProducts([...products, newProductData]);
@@ -57,6 +140,17 @@ export default function Home() {
     } catch (err) {
       setError("Failed to add product");
       console.error("Error adding product:", err);
+    }
+  };
+
+  const handleDeleteProduct = async (productId: number) => {
+    try {
+      await deleteProduct(productId);
+      setProducts(products.filter((p) => p.id !== productId));
+      setError(null);
+    } catch (err) {
+      setError("Failed to delete product");
+      console.error("Error deleting product:", err);
     }
   };
 
@@ -76,6 +170,31 @@ export default function Home() {
     } catch (err) {
       setError("Failed to update product");
       console.error("Error updating product:", err);
+    }
+  };
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    try {
+      const oldIndex = products.findIndex((p) => p.id === active.id);
+      const newIndex = products.findIndex((p) => p.id === over.id);
+
+      const newProducts = arrayMove(products, oldIndex, newIndex);
+      setProducts(newProducts);
+
+      // Update orders in the database
+      const updates = newProducts.map((product, index) =>
+        updateProduct(product.id, { order: index }),
+      );
+      await Promise.all(updates);
+      setError(null);
+    } catch (err) {
+      setError("Failed to reorder products");
+      console.error("Error reordering products:", err);
+      // Reload products to ensure UI is in sync with DB
+      void loadProducts();
     }
   };
 
@@ -124,32 +243,25 @@ export default function Home() {
           </Box>
 
           <Box className="mt-3 space-y-2 md:space-y-3">
-            {products.map((product) => (
-              <Flex
-                key={product.id}
-                align="center"
-                justify="between"
-                className="cursor-pointer rounded-lg border border-gray-100 px-3 py-2.5 transition-colors hover:bg-gray-50 md:px-4 md:py-3.5"
-                onClick={() => void toggleProductAvailability(product.id)}
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEnd}
+            >
+              <SortableContext
+                items={products}
+                strategy={verticalListSortingStrategy}
               >
-                <Flex gap="4" align="center">
-                  <Checkbox
-                    checked={product.available}
-                    onCheckedChange={() =>
-                      void toggleProductAvailability(product.id)
-                    }
-                    size="3"
+                {products.map((product) => (
+                  <SortableItem
+                    key={product.id}
+                    product={product}
+                    onToggle={toggleProductAvailability}
+                    onDelete={handleDeleteProduct}
                   />
-                  <Text
-                    className={`select-none text-base ${
-                      product.available ? "" : "text-gray-400"
-                    }`}
-                  >
-                    {product.name}
-                  </Text>
-                </Flex>
-              </Flex>
-            ))}
+                ))}
+              </SortableContext>
+            </DndContext>
           </Box>
         </Box>
       </div>

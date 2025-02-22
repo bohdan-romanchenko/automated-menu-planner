@@ -6,6 +6,7 @@ export type Database = {
           id: number;
           name: string;
           available: boolean;
+          order: number;
           created_at: string;
         };
         Insert: Omit<
