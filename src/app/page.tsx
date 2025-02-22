@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Container,
   Heading,
@@ -11,44 +11,81 @@ import {
   Checkbox,
 } from "@radix-ui/themes";
 import { PlusIcon } from "@radix-ui/react-icons";
-
-interface Product {
-  id: string;
-  name: string;
-  available: boolean;
-}
+import {
+  getAllProducts,
+  addProduct,
+  updateProduct,
+  deleteProduct,
+  type Product,
+} from "../../lib/products";
 
 export default function Home() {
-  const [products, setProducts] = useState<Product[]>([
-    { id: "1", name: "Tomatoes", available: true },
-    { id: "2", name: "Potatoes", available: false },
-    { id: "3", name: "Onions", available: true },
-  ]);
+  const [products, setProducts] = useState<Product[]>([]);
   const [newProduct, setNewProduct] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleAddProduct = () => {
-    if (newProduct.trim()) {
-      setProducts([
-        ...products,
-        {
-          id: Date.now().toString(),
-          name: newProduct.trim(),
-          available: true,
-        },
-      ]);
-      setNewProduct("");
+  useEffect(() => {
+    void loadProducts();
+  }, []);
+
+  const loadProducts = async () => {
+    try {
+      const dbProducts = await getAllProducts();
+      setProducts(dbProducts);
+      setError(null);
+    } catch (err) {
+      setError("Failed to load products");
+      console.error("Error loading products:", err);
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const toggleProductAvailability = (productId: string) => {
-    setProducts(
-      products.map((product) =>
-        product.id === productId
-          ? { ...product, available: !product.available }
-          : product,
-      ),
-    );
+  const handleAddProduct = async () => {
+    if (!newProduct.trim()) return;
+
+    try {
+      const newProductData = await addProduct({
+        name: newProduct.trim(),
+        available: true,
+      });
+
+      setProducts([...products, newProductData]);
+      setNewProduct("");
+      setError(null);
+    } catch (err) {
+      setError("Failed to add product");
+      console.error("Error adding product:", err);
+    }
   };
+
+  const toggleProductAvailability = async (productId: number) => {
+    try {
+      const product = products.find((p) => p.id === productId);
+      if (!product) return;
+
+      const updatedProduct = await updateProduct(productId, {
+        available: !product.available,
+      });
+
+      setProducts(
+        products.map((p) => (p.id === productId ? updatedProduct : p)),
+      );
+      setError(null);
+    } catch (err) {
+      setError("Failed to update product");
+      console.error("Error updating product:", err);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        Loading...
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-8 md:px-6">
@@ -57,6 +94,10 @@ export default function Home() {
           <Heading size="6" mb="6" className="text-center">
             My Kitchen Inventory
           </Heading>
+
+          {error && (
+            <Text className="mb-4 text-center text-red-500">{error}</Text>
+          )}
 
           <Box mb="6 md:mb-8">
             <Flex className="gap-2 md:gap-3" align="center">
@@ -68,12 +109,12 @@ export default function Home() {
                 className="h-11 flex-1 rounded-lg border border-gray-200 px-3 text-base focus:border-blue-500 focus:outline-none md:h-14 md:px-5"
                 onKeyPress={(e) => {
                   if (e.key === "Enter") {
-                    handleAddProduct();
+                    void handleAddProduct();
                   }
                 }}
               />
               <Button
-                onClick={handleAddProduct}
+                onClick={() => void handleAddProduct()}
                 className="inline-flex h-11 items-center justify-center bg-[#B7E33B] px-3 text-base font-medium hover:bg-[#a5ce34] md:h-14 md:px-5"
               >
                 <PlusIcon width="18" height="18" className="mr-1" />
@@ -89,13 +130,13 @@ export default function Home() {
                 align="center"
                 justify="between"
                 className="cursor-pointer rounded-lg border border-gray-100 px-3 py-2.5 transition-colors hover:bg-gray-50 md:px-4 md:py-3.5"
-                onClick={() => toggleProductAvailability(product.id)}
+                onClick={() => void toggleProductAvailability(product.id)}
               >
                 <Flex gap="4" align="center">
                   <Checkbox
                     checked={product.available}
                     onCheckedChange={() =>
-                      toggleProductAvailability(product.id)
+                      void toggleProductAvailability(product.id)
                     }
                     size="3"
                   />
