@@ -1,6 +1,19 @@
-import { Box, Heading, Text, Button } from "@radix-ui/themes";
-import { FileIcon } from "@radix-ui/react-icons";
-import { type ReactNode, useRef } from "react";
+import {
+  Box,
+  Heading,
+  Text,
+  Button,
+  Dialog,
+  TextField,
+} from "@radix-ui/themes";
+import { FileIcon, Pencil1Icon } from "@radix-ui/react-icons";
+import {
+  type ReactNode,
+  useRef,
+  useState,
+  useEffect,
+  type ChangeEvent,
+} from "react";
 import { GeistSans } from "geist/font/sans";
 
 interface DayMenu {
@@ -23,6 +36,7 @@ interface WeeklyMenu {
 
 interface MenuDisplayProps {
   content: string;
+  onContentChange?: (updatedContent: string) => void;
 }
 
 // Order matters for display
@@ -63,8 +77,21 @@ const DAY_NAMES = {
   sunday: "Неділя",
 } as const;
 
-export function MenuDisplay({ content }: MenuDisplayProps): ReactNode {
+type DayKey = keyof typeof DAY_NAMES;
+type MealTypeKey = keyof typeof MEAL_TYPES;
+
+export function MenuDisplay({
+  content,
+  onContentChange,
+}: MenuDisplayProps): ReactNode {
   const printContentRef = useRef<HTMLDivElement>(null);
+  const [weeklyMenu, setWeeklyMenu] = useState<WeeklyMenu | null>(null);
+  const [editingMeal, setEditingMeal] = useState<{
+    day: DayKey;
+    mealType: MealTypeKey;
+  } | null>(null);
+  const [editContent, setEditContent] = useState("");
+  const [dialogOpen, setDialogOpen] = useState(false);
 
   const handlePrint = () => {
     // Simply call window.print() to trigger the native print dialog
@@ -72,19 +99,63 @@ export function MenuDisplay({ content }: MenuDisplayProps): ReactNode {
     window.print();
   };
 
-  let weeklyMenu: WeeklyMenu;
-  try {
-    const parsed = JSON.parse(content) as unknown;
-    if (typeof parsed !== "object" || parsed === null) {
-      throw new Error("Invalid menu format");
+  // Replace useState with useEffect for initial parsing of menu content
+  useEffect(() => {
+    try {
+      const parsed = JSON.parse(content) as unknown;
+      if (typeof parsed !== "object" || parsed === null) {
+        throw new Error("Invalid menu format");
+      }
+      setWeeklyMenu(parsed as WeeklyMenu);
+    } catch (err) {
+      console.error("Failed to parse menu content:", err);
     }
-    weeklyMenu = parsed as WeeklyMenu;
-  } catch (err) {
-    console.error("Failed to parse menu content:", err);
+  }, [content]);
+
+  if (!weeklyMenu) {
     return <Text className="text-red-500">Failed to parse menu content</Text>;
   }
 
-  // Mobile view (list)
+  const handleEditClick = (day: DayKey, mealType: MealTypeKey) => {
+    setEditingMeal({ day, mealType });
+    setEditContent(weeklyMenu[day][mealType]);
+    setDialogOpen(true);
+  };
+
+  const handleSaveEdit = () => {
+    if (!editingMeal) {
+      console.error("No meal currently being edited");
+      return;
+    }
+
+    const { day, mealType } = editingMeal;
+    const updatedMenu = JSON.parse(JSON.stringify(weeklyMenu)) as WeeklyMenu;
+    updatedMenu[day][mealType] = editContent;
+
+    // Set the updated menu in local state
+    setWeeklyMenu(updatedMenu);
+
+    // If onContentChange is provided, call it and close the dialog
+    if (onContentChange) {
+      try {
+        const updatedContent = JSON.stringify(updatedMenu);
+        console.log(`Updating menu content for ${day} ${mealType}`);
+        onContentChange(updatedContent);
+        setDialogOpen(false);
+      } catch (error) {
+        console.error("Failed to save menu changes:", error);
+        // Keep dialog open if there was an error
+      }
+    } else {
+      console.warn(
+        "onContentChange prop is not provided - changes will only be visible until page refresh",
+      );
+      // Still close dialog even without onContentChange, but changes won't persist
+      setDialogOpen(false);
+    }
+  };
+
+  // Mobile view (list) with edit functionality
   const mobileView = (
     <div className="md:hidden print:hidden">
       {DISPLAY_DAYS.map(({ key: day, label }) => (
@@ -94,15 +165,21 @@ export function MenuDisplay({ content }: MenuDisplayProps): ReactNode {
           </Heading>
           <Box className="space-y-3">
             {DISPLAY_MEAL_TYPES.map(({ key: mealType, label: mealLabel }) => (
-              <Box key={mealType} className="rounded-lg bg-gray-50 p-3">
-                <Text
-                  as="div"
-                  size="2"
-                  weight="medium"
-                  className="text-[#2B4C32]"
-                >
-                  {mealLabel}
-                </Text>
+              <Box
+                key={mealType}
+                className="cursor-pointer rounded-lg bg-gray-50 p-3 transition-colors hover:bg-gray-100"
+                onClick={() => handleEditClick(day, mealType)}
+              >
+                <div className="flex items-center justify-between">
+                  <Text
+                    as="div"
+                    size="2"
+                    weight="medium"
+                    className="text-[#2B4C32]"
+                  >
+                    {mealLabel}
+                  </Text>
+                </div>
                 <Text as="div" size="2" className="mt-1">
                   {weeklyMenu[day][mealType]}
                 </Text>
@@ -275,7 +352,11 @@ export function MenuDisplay({ content }: MenuDisplayProps): ReactNode {
                   {mealLabel}
                 </td>
                 {DISPLAY_DAYS.map(({ key: day }) => (
-                  <td key={day} className="py-3 pr-4 text-sm">
+                  <td
+                    key={day}
+                    className="cursor-pointer py-3 pr-4 text-sm transition-colors hover:bg-gray-50"
+                    onClick={() => handleEditClick(day, mealType)}
+                  >
                     {weeklyMenu[day][mealType]}
                   </td>
                 ))}
@@ -285,6 +366,43 @@ export function MenuDisplay({ content }: MenuDisplayProps): ReactNode {
         </table>
       </div>
       {printVersion}
+
+      {/* Edit Dialog */}
+      <Dialog.Root open={dialogOpen} onOpenChange={setDialogOpen}>
+        <Dialog.Content>
+          <Dialog.Title>
+            {editingMeal
+              ? `Edit ${MEAL_TYPES[editingMeal.mealType]} for ${DAY_NAMES[editingMeal.day]}`
+              : "Edit Meal"}
+          </Dialog.Title>
+
+          <div className="mt-4">
+            <textarea
+              placeholder="Enter meal details"
+              value={editContent}
+              onChange={(e: ChangeEvent<HTMLTextAreaElement>) =>
+                setEditContent(e.target.value)
+              }
+              rows={5}
+              className="w-full rounded-md border border-gray-300 p-2"
+            />
+          </div>
+
+          <div className="mt-4 flex justify-end gap-3">
+            <Dialog.Close>
+              <Button variant="soft" color="gray">
+                Cancel
+              </Button>
+            </Dialog.Close>
+            <Button
+              onClick={handleSaveEdit}
+              className="bg-[#B7E33B] hover:bg-[#a5ce34]"
+            >
+              Save Changes
+            </Button>
+          </div>
+        </Dialog.Content>
+      </Dialog.Root>
     </Box>
   );
 }

@@ -5,7 +5,7 @@ import { Box, Heading, Button, Flex, Text } from "@radix-ui/themes";
 import { StarIcon } from "@radix-ui/react-icons";
 import { Navigation } from "../../components/Navigation";
 import { generateMenu } from "../actions";
-import { getLatestMenu } from "../../lib/menus";
+import { getLatestMenu, updateMenu } from "../../lib/menus";
 import { MenuDisplay } from "../../components/MenuDisplay";
 
 interface MenuContent {
@@ -53,6 +53,22 @@ export default function Menu() {
     }
   };
 
+  const handleMenuUpdate = async (updatedContent: string) => {
+    if (!menu) return;
+
+    setError(null);
+    try {
+      const updatedMenu = await updateMenu(menu.id, updatedContent);
+      if (updatedMenu) {
+        setMenu(updatedMenu);
+        console.log("Menu updated successfully");
+      }
+    } catch (err) {
+      setError("Failed to update menu");
+      console.error("Error updating menu:", err);
+    }
+  };
+
   return (
     <div className="flex min-h-screen flex-col items-center bg-gray-50 px-4 py-8 md:px-6">
       <Navigation />
@@ -79,7 +95,10 @@ export default function Menu() {
             {isLoading ? (
               <Text className="text-center text-gray-500">Loading...</Text>
             ) : menu ? (
-              <MenuDisplay content={menu.content} />
+              <MenuDisplay
+                content={menu.content}
+                onContentChange={handleMenuUpdate}
+              />
             ) : (
               <Text className="text-center text-gray-500">
                 No menu generated yet. Click the button above to generate one!
