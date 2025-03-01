@@ -67,78 +67,9 @@ export function MenuDisplay({ content }: MenuDisplayProps): ReactNode {
   const printContentRef = useRef<HTMLDivElement>(null);
 
   const handlePrint = () => {
-    const printContent = printContentRef.current;
-    if (!printContent) return;
-
-    const iframe = document.createElement("iframe");
-    iframe.style.display = "none";
-    document.body.appendChild(iframe);
-
-    const iframeDoc = iframe.contentWindow?.document;
-    if (!iframeDoc) return;
-
-    const styles = Array.from(document.styleSheets)
-      .map((styleSheet) => {
-        try {
-          return Array.from(styleSheet.cssRules)
-            .map((rule) => rule.cssText)
-            .join("");
-        } catch {
-          return "";
-        }
-      })
-      .join("");
-
-    iframeDoc.write(`
-      <!DOCTYPE html>
-      <html class="${GeistSans.variable}">
-        <head>
-          <style>
-            ${styles}
-            @page {
-              size: landscape;
-              margin: 1.5cm;
-            }
-            body {
-              margin: 0;
-              padding: 0;
-              font-family: var(--font-geist-sans), system-ui, sans-serif;
-            }
-            .print-content {
-              padding: 0;
-            }
-            table {
-              width: 100%;
-              border-collapse: collapse;
-              font-family: var(--font-geist-sans), system-ui, sans-serif;
-            }
-            td, th {
-              border: 1px solid black;
-              padding: 8px;
-              text-align: left;
-              font-family: var(--font-geist-sans), system-ui, sans-serif;
-            }
-            h1 {
-              font-family: var(--font-geist-sans), system-ui, sans-serif;
-              font-size: 1.5rem;
-              font-weight: 600;
-            }
-          </style>
-        </head>
-        <body>
-          <div class="print-content">
-            ${printContent.innerHTML}
-          </div>
-        </body>
-      </html>
-    `);
-
-    iframeDoc.close();
-
-    iframe.contentWindow?.print();
-    setTimeout(() => {
-      document.body.removeChild(iframe);
-    }, 100);
+    // Simply call window.print() to trigger the native print dialog
+    // The print-only content is already in the DOM with print CSS applied
+    window.print();
   };
 
   let weeklyMenu: WeeklyMenu;
@@ -155,7 +86,7 @@ export function MenuDisplay({ content }: MenuDisplayProps): ReactNode {
 
   // Mobile view (list)
   const mobileView = (
-    <div className="md:hidden">
+    <div className="md:hidden print:hidden">
       {DISPLAY_DAYS.map(({ key: day, label }) => (
         <Box key={day} className="mb-6 last:mb-0">
           <Heading size="4" mb="2" className="text-[#2B4C32]">
@@ -183,51 +114,130 @@ export function MenuDisplay({ content }: MenuDisplayProps): ReactNode {
     </div>
   );
 
-  const printableContent = (
-    <div ref={printContentRef} className="print-content">
-      <Heading size="6" className="mb-4 text-center">
-        Weekly Menu
-      </Heading>
-      <table className="w-full min-w-[800px] border-collapse">
-        <thead>
-          <tr>
-            <th className="border border-gray-200 pb-2 text-left text-sm font-medium">
-              Час
-            </th>
-            {DISPLAY_DAYS.map(({ key, label }) => (
-              <th
-                key={key}
-                className="border border-gray-200 pb-2 text-left text-sm font-medium"
-              >
-                {label}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {DISPLAY_MEAL_TYPES.map(({ key: mealType, label: mealLabel }) => (
-            <tr key={mealType} className="border-b border-gray-100">
-              <td className="border border-gray-200 py-3 pr-4 text-sm font-medium">
-                {mealLabel}
-              </td>
-              {DISPLAY_DAYS.map(({ key: day }) => (
-                <td
-                  key={day}
-                  className="border border-gray-200 py-3 pr-4 text-sm"
-                >
-                  {weeklyMenu[day][mealType]}
-                </td>
+  // Print version (always a table, hidden except when printing)
+  const printVersion = (
+    <div className="hidden print:block">
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `
+        @media print {
+          @page {
+            size: landscape;
+            margin: 1cm;
+          }
+          /* Make sure everything has white background */
+          * {
+            background-color: white !important;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+            color-adjust: exact;
+          }
+          body {
+            margin: 0 !important;
+            padding: 0 !important;
+            font-family: system-ui, -apple-system, sans-serif;
+            background-color: white !important;
+          }
+          /* Hide all borders and padding from containers */
+          .mt-4, .p-4, .border, .border-gray-200, .rounded-lg {
+            margin: 0 !important;
+            padding: 0 !important;
+            border: none !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
+            background-color: white !important;
+          }
+          /* Print container */
+          .print-container {
+            width: 100% !important;
+            max-width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            background-color: white !important;
+          }
+          /* No header - we'll create the table directly */
+          .print-header {
+            display: none !important;
+          }
+          /* Set table to fit page width */
+          table.print-table {
+            width: 100% !important;
+            max-width: 100% !important;
+            margin: 0 auto !important;
+            table-layout: fixed;
+            border: 1.5px solid black;
+            border-collapse: collapse;
+            page-break-inside: avoid;
+            background-color: white !important;
+          }
+          /* Make headers and cells properly visible */
+          table.print-table th, 
+          table.print-table td {
+            border: 1px solid black;
+            padding: 0.2cm;
+            vertical-align: top;
+            font-size: 10pt;
+            line-height: 1.3;
+            overflow-wrap: break-word;
+            word-wrap: break-word;
+            text-align: left;
+            background-color: white !important;
+          }
+          /* Make header row strong */
+          table.print-table thead th {
+            font-weight: bold;
+            background-color: white !important;
+            font-size: 11pt;
+          }
+          /* First column is day header column - time column */
+          table.print-table th:first-child {
+            width: 10%;
+            background-color: white !important;
+          }
+          /* Meal type column styling */
+          table.print-table td:first-child {
+            font-weight: bold;
+            background-color: white !important;
+          }
+          /* Day columns should be equal width */
+          table.print-table th:not(:first-child),
+          table.print-table td:not(:first-child) {
+            width: calc(90% / 7); /* Distribute remaining 90% equally among 7 days */
+            background-color: white !important;
+          }
+        }
+      `,
+        }}
+      />
+      <div className="print-container">
+        {/* Removed header div to eliminate duplicate headers */}
+        <table className="print-table">
+          <thead>
+            <tr>
+              <th>Час</th>
+              {DISPLAY_DAYS.map(({ key, label }) => (
+                <th key={key}>{label}</th>
               ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {DISPLAY_MEAL_TYPES.map(({ key: mealType, label: mealLabel }) => (
+              <tr key={mealType}>
+                <td>{mealLabel}</td>
+                {DISPLAY_DAYS.map(({ key: day }) => (
+                  <td key={day}>{weeklyMenu[day][mealType]}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 
   return (
     <Box className="mt-4 rounded-lg border border-gray-200 p-4">
-      <div className="mb-4 flex items-center justify-end">
+      <div className="mb-4 flex items-center justify-end print:hidden">
         <Button
           onClick={handlePrint}
           className="inline-flex items-center bg-[#B7E33B] font-medium hover:bg-[#a5ce34]"
@@ -238,7 +248,7 @@ export function MenuDisplay({ content }: MenuDisplayProps): ReactNode {
         </Button>
       </div>
       {mobileView}
-      <div className="hidden overflow-x-auto md:block">
+      <div className="hidden overflow-x-auto md:block print:hidden">
         <table className="w-full min-w-[800px] border-collapse">
           <thead>
             <tr>
@@ -274,7 +284,7 @@ export function MenuDisplay({ content }: MenuDisplayProps): ReactNode {
           </tbody>
         </table>
       </div>
-      <div className="hidden">{printableContent}</div>
+      {printVersion}
     </Box>
   );
 }
